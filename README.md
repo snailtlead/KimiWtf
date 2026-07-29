@@ -1,12 +1,12 @@
 # KimiWtf
 
 [![CI](https://github.com/snailtlead/KimiWtf/actions/workflows/ci.yml/badge.svg)](https://github.com/snailtlead/KimiWtf/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/snailtlead/KimiWtf/branch/main/graph/badge.svg)](https://codecov.io/gh/snailtlead/KimiWtf)
+[![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/snailtlead/KimiWtf/badges/coverage.json)](https://github.com/snailtlead/KimiWtf/blob/badges/coverage.json)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-> Бейдж покрытия показывает `unknown`, пока в Codecov не добавлен репозиторий и в секреты GitHub (`CODECOV_TOKEN`) не сохранён Repository Upload Token — выгрузка отчёта в CI настроена и оживает сразу после этого.
+> Бейдж покрытия генерируется самим CI из отчёта pytest-cov и публикуется в ветку [`badges`](https://github.com/snailtlead/KimiWtf/blob/badges/coverage.json) — без сторонних сервисов; значение проверяемо по JSON в ветке и логу прогона.
 
 Плагин для [Kimi Code CLI](https://www.kimi.com/code/docs/en/), который показывает квоту управляемого аккаунта в строке состояния: недельную квоту и скользящее 5-часовое окно в виде цветных прогресс-баров. Кеш с TTL 5 минут, не чаще одного запроса к API в минуту, токен используется только на чтение.
 
