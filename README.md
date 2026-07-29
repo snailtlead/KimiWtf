@@ -6,7 +6,7 @@
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-> Бейдж покрытия показывает `unknown`, пока репозиторий не подключён к Codecov — выгрузка отчёта настроена в CI и оживает после первого прогона на GitHub.
+> Бейдж покрытия показывает `unknown`, пока в Codecov не добавлен репозиторий и в секреты GitHub (`CODECOV_TOKEN`) не сохранён Repository Upload Token — выгрузка отчёта в CI настроена и оживает сразу после этого.
 
 Плагин для [Kimi Code CLI](https://www.kimi.com/code/docs/en/), который показывает квоту управляемого аккаунта в строке состояния: недельную квоту и скользящее 5-часовое окно в виде цветных прогресс-баров. Кеш с TTL 5 минут, не чаще одного запроса к API в минуту, токен используется только на чтение.
 
