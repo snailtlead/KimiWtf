@@ -168,12 +168,19 @@ def test_install_preserves_existing_settings(home, plugin_root):
     assert '# command = "~/example.sh"' in text
 
 
+@pytest.mark.skipif(tui_config.tomllib is None, reason="tomllib доступен с Python 3.11")
 def test_malformed_toml_aborts_without_changes(home, plugin_root):
     bad = "theme = = broken\n"
     (home / "tui.toml").write_text(bad)
     with pytest.raises(tui_config.TuiConfigError, match="валидным TOML"):
         tui_config.install(str(plugin_root))
     assert (home / "tui.toml").read_text() == bad
+
+
+def test_validate_toml_noop_without_tomllib(monkeypatch):
+    """На Python < 3.11 (без tomllib) валидация осознанно отключена."""
+    monkeypatch.setattr(tui_config, "tomllib", None)
+    tui_config.validate_toml("это = = не toml\n")  # не бросает
 
 
 # ---------- main ----------
