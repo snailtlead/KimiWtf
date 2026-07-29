@@ -15,6 +15,7 @@
 """
 
 import os
+import shlex
 import shutil
 import sys
 
@@ -176,9 +177,12 @@ def _apply(transform):
 
 
 def install(plugin_root):
-    command = os.path.join(plugin_root, STATUSLINE_FILE)
-    if not os.path.isfile(command):
-        raise TuiConfigError(f"не найден {STATUSLINE_FILE} рядом с плагином: {command}")
+    script = os.path.join(plugin_root, STATUSLINE_FILE)
+    if not os.path.isfile(script):
+        raise TuiConfigError(f"не найден {STATUSLINE_FILE} рядом с плагином: {script}")
+    # Раннер TUI выполняет команду через `sh -c`: вызов через python3 не зависит
+    # от executable-бита, который теряется при установке плагина из zip.
+    command = f"python3 {shlex.quote(script)}"
     path, changed = _apply(lambda text: set_status_line_command(text, command))
     state = "обновлён" if changed else "уже был настроен"
     print(f"[kimi-wtf] status line {state}: {path}")

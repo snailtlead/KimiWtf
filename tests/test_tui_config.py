@@ -107,7 +107,7 @@ def test_section_header_parsing():
 def test_install_writes_command(home, plugin_root, capsys):
     tui_config.install(str(plugin_root))
     text = (home / "tui.toml").read_text()
-    expected = f'command = "{plugin_root}/statusline.py"'
+    expected = f'command = "python3 {plugin_root}/statusline.py"'
     assert expected in text
     out = capsys.readouterr().out
     assert "/reload-tui" in out
@@ -238,6 +238,6 @@ def test_full_cycle_json_shape(home, plugin_root):
 
     with open(home / "tui.toml", "rb") as f:
         parsed = tomllib.load(f)
-    expected = os.path.join(str(plugin_root), "statusline.py")
+    expected = f"python3 {os.path.join(str(plugin_root), 'statusline.py')}"
     assert parsed["status_line"]["command"] == expected
     json.dumps(parsed)  # значения сериализуемы, кракозябр нет
