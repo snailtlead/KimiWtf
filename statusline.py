@@ -207,7 +207,9 @@ def quota_segment(cache):
         seg = f"{label} {progress_bar(pct)} {fg(usage_color(pct))}{pct}%{RESET}"
         reset = fmt_reset(row.get("reset"), with_date)
         if reset:
-            seg += f" {DIM}↻{reset}{RESET}"
+            # Пробел после иконки: ↻ в ряде шрифтов шире одной ячейки,
+            # без пробела глиф визуально наезжает на цифры времени.
+            seg += f" {DIM}↻ {reset}{RESET}"
         parts.append(seg)
     return "  ".join(parts) if parts else f"{DIM}quota …{RESET}"
 

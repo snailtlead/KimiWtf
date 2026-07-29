@@ -1,6 +1,6 @@
 {
   "name": "kimi-wtf",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Status line for Kimi Code CLI: managed account quota (weekly + 5-hour window) as colored progress bars",
   "keywords": ["status-line", "quota", "usage", "kimi-code"],
   "author": "snailtlead",
