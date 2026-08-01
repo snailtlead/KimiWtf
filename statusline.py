@@ -20,6 +20,13 @@ CLI хранит в credentials/kimi-code.json. Чтобы уложиться в
 и не ходит на OAuth token-endpoint; обновлением токена единолично владеет
 сам CLI. Мёртвый токен приводит к HTTP 401, что эквивалентно любой другой
 ошибке запроса: старые данные остаются, повтор не чаще раза в минуту.
+
+Кастомная строка полностью заменяет первую строку встроенного футера, поэтому
+встроенный слот `tasks` (фоновые задачи) пропадает. Чтобы вернуть его, строка
+дополнительно читает реестр задач текущей сессии с диска:
+$KIMI_CODE_HOME/sessions/<wd>/session_<id>/agents/*/tasks/*.json — каждый файл
+описывает задачу со status ("running" и т.д.) и kind ("agent" | "process").
+Чтение локальное и дешёвое, сетевых запросов здесь нет.
 """
 
 import contextlib
@@ -161,6 +168,71 @@ def maybe_spawn_refresh(cache):
         )
 
 
+# ---------- фоновые задачи текущей сессии ----------
+
+def session_dir(snapshot):
+    """Каталог сессии по sessionId из снимка TUI или None."""
+    sid = snapshot.get("sessionId")
+    if not isinstance(sid, str) or not sid:
+        return None
+    name = sid if sid.startswith("session_") else "session_" + sid
+    base = os.path.join(kimi_home(), "sessions")
+    try:
+        workspaces = list(os.scandir(base))
+    except OSError:
+        return None
+    for ws in workspaces:
+        if not ws.is_dir():
+            continue
+        candidate = os.path.join(ws.path, name)
+        if os.path.isdir(candidate):
+            return candidate
+    return None
+
+
+def count_running_tasks(session):
+    """Число запущенных фоновых задач по kind: {"agent": n, "process": n}."""
+    counts = {"agent": 0, "process": 0}
+    try:
+        agents = [a for a in os.scandir(os.path.join(session, "agents")) if a.is_dir()]
+    except OSError:
+        return counts
+    for agent in agents:
+        try:
+            entries = [e for e in os.scandir(os.path.join(agent.path, "tasks")) if e.name.endswith(".json")]
+        except OSError:
+            continue
+        for entry in entries:
+            try:
+                with open(entry.path, encoding="utf-8") as f:
+                    task = json.load(f)
+            except Exception:
+                continue
+            if not isinstance(task, dict) or task.get("status") != "running":
+                continue
+            kind = task.get("kind")
+            if kind in counts:
+                counts[kind] += 1
+    return counts
+
+
+def tasks_segment(snapshot):
+    """Сегмент `⚙ N agents [+ M shells]`; пустая строка, когда фоновых задач нет."""
+    session = session_dir(snapshot)
+    if not session:
+        return ""
+    counts = count_running_tasks(session)
+    agents, procs = counts["agent"], counts["process"]
+    if not agents and not procs:
+        return ""
+    parts = []
+    if agents:
+        parts.append(f"{agents} agent" + ("s" if agents > 1 else ""))
+    if procs:
+        parts.append(f"{procs} shell" + ("s" if procs > 1 else ""))
+    return f"{fg(81)}⚙ {' + '.join(parts)}{RESET}"
+
+
 # ---------- рендер ----------
 
 RESET = "\x1b[0m"
@@ -249,6 +321,10 @@ def render(snapshot, cache):
 
     # Расход контекста здесь намеренно не показывается: вторая строка футера
     # всегда рисует его справа, даже при кастомной команде.
+
+    tasks = tasks_segment(snapshot)
+    if tasks:
+        parts.append(tasks)
 
     parts.append(quota_segment(cache))
     return f" {DIM}│{RESET} ".join(parts)

@@ -1,7 +1,7 @@
 {
   "name": "kimi-wtf",
-  "version": "0.1.1",
-  "description": "Status line for Kimi Code CLI: managed account quota (weekly + 5-hour window) as colored progress bars",
+  "version": "0.1.2",
+  "description": "Status line for Kimi Code CLI: managed account quota (weekly + 5-hour window) as colored progress bars, plus running background tasks",
   "keywords": ["status-line", "quota", "usage", "kimi-code"],
   "author": "snailtlead",
   "homepage": "https://github.com/snailtlead/KimiWtf",

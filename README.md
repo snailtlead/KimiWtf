@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/snailtlead/KimiWtf/actions/workflows/ci.yml/badge.svg)](https://github.com/snailtlead/KimiWtf/actions/workflows/ci.yml)
 [![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/snailtlead/KimiWtf/badges/coverage.json)](https://github.com/snailtlead/KimiWtf/blob/badges/coverage.json)
-[![version](https://img.shields.io/badge/version-0.1.1-blue.svg)](kimi.plugin.json)
+[![version](https://img.shields.io/badge/version-0.1.2-blue.svg)](kimi.plugin.json)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -20,10 +20,10 @@ A plugin for [Kimi Code CLI](https://www.kimi.com/code/docs/en/) that shows your
 ### What it looks like
 
 ```
-[plan+yolo] │ K3 │ ~/proj (main) │ 5h █░░░░░░░ 16% ↻ 03:24  wk ░░░░░░░░ 3% ↻ 05.08
+[plan+yolo] │ K3 │ ~/proj (main) │ ⚙ 1 agent + 2 shells │ 5h █░░░░░░░ 16% ↻ 03:24  wk ░░░░░░░░ 3% ↻ 05.08
 ```
 
-Bar and percentage colors follow usage thresholds: green < 50%, yellow 50–80%, red ≥ 80% (the same threshold at which the Kimi console suggests Extra Usage). `↻` is the window reset time (local). Mode badges (`plan`, `yolo`, `auto`) only appear in non-default modes.
+Bar and percentage colors follow usage thresholds: green < 50%, yellow 50–80%, red ≥ 80% (the same threshold at which the Kimi console suggests Extra Usage). `↻` is the window reset time (local). Mode badges (`plan`, `yolo`, `auto`) only appear in non-default modes. The `⚙` segment shows running background tasks of the current session (subagents and background shell commands); it replaces the built-in `tasks` footer slot that a custom status line hides, and appears only while at least one task is running.
 
 ### Requirements
 
@@ -44,7 +44,7 @@ As a plugin (recommended):
 
 `/kimi-wtf:install` idempotently sets `[status_line] command` in `~/.kimi-code/tui.toml` pointing at the plugin's managed copy (the path survives plugin updates), and keeps a `tui.toml.bak` backup. The rest of the file is left untouched.
 
-Installing from the repository URL installs the **latest release**; pin a version with `/plugins install https://github.com/snailtlead/KimiWtf/releases/tag/v0.1.1`.
+Installing from the repository URL installs the **latest release**; pin a version with `/plugins install https://github.com/snailtlead/KimiWtf/releases/tag/v0.1.2`.
 
 #### Manual installation (without the plugin)
 
@@ -118,10 +118,10 @@ Layout: `statusline.py` — the status line; `scripts/tui_config.py` — the `tu
 ### Как выглядит
 
 ```
-[plan+yolo] │ K3 │ ~/proj (main) │ 5h █░░░░░░░ 16% ↻ 03:24  wk ░░░░░░░░ 3% ↻ 05.08
+[plan+yolo] │ K3 │ ~/proj (main) │ ⚙ 1 agent + 2 shells │ 5h █░░░░░░░ 16% ↻ 03:24  wk ░░░░░░░░ 3% ↻ 05.08
 ```
 
-Цвет бара и процента — по порогам расхода: зелёный < 50%, жёлтый 50–80%, красный ≥ 80% (порог совпадает с тем, с которого консоль Kimi предлагает подключить Extra Usage). `↻` — время сброса окна (локальное). Бейджы режимов (`plan`, `yolo`, `auto`) показываются только в нестандартных режимах.
+Цвет бара и процента — по порогам расхода: зелёный < 50%, жёлтый 50–80%, красный ≥ 80% (порог совпадает с тем, с которого консоль Kimi предлагает подключить Extra Usage). `↻` — время сброса окна (локальное). Бейджы режимов (`plan`, `yolo`, `auto`) показываются только в нестандартных режимах. Сегмент `⚙` показывает запущенные фоновые задачи текущей сессии (субагенты и фоновые shell-команды); он заменяет встроенный слот `tasks`, который пропадает при кастомной строке, и виден только пока есть хотя бы одна запущенная задача.
 
 ### Требования
 
@@ -142,7 +142,7 @@ Layout: `statusline.py` — the status line; `scripts/tui_config.py` — the `tu
 
 Команда `/kimi-wtf:install` идемпотентно прописывает `[status_line] command` в `~/.kimi-code/tui.toml`, указывая на managed-копию плагина (путь переживает обновления плагина), и оставляет резервную копию `tui.toml.bak`. Остальное содержимое файла не трогается.
 
-При установке из URL репозитория ставится **последний релиз**; зафиксировать версию можно так: `/plugins install https://github.com/snailtlead/KimiWtf/releases/tag/v0.1.1`.
+При установке из URL репозитория ставится **последний релиз**; зафиксировать версию можно так: `/plugins install https://github.com/snailtlead/KimiWtf/releases/tag/v0.1.2`.
 
 #### Ручная установка (без плагина)
 

@@ -339,6 +339,73 @@ def test_render_resets_ansi_per_segment():
     assert line.count("\x1b[0m") >= 4  # каждый окрашенный сегмент закрыт
 
 
+# ---------- фоновые задачи ----------
+
+def _make_session(home, sid="abc-123"):
+    session = home / "sessions" / "wd_test" / f"session_{sid}"
+    session.mkdir(parents=True)
+    return session
+
+
+def _write_task(session, agent, task_id, status, kind="agent"):
+    tasks = session / "agents" / agent / "tasks"
+    tasks.mkdir(parents=True, exist_ok=True)
+    (tasks / f"{task_id}.json").write_text(json.dumps({"status": status, "kind": kind}))
+
+
+def test_session_dir_resolves_snapshot_id(home):
+    session = _make_session(home)
+    assert statusline.session_dir({"sessionId": "abc-123"}) == str(session)
+    assert statusline.session_dir({"sessionId": "session_abc-123"}) == str(session)
+
+
+def test_session_dir_missing(home):
+    assert statusline.session_dir({}) is None
+    assert statusline.session_dir({"sessionId": ""}) is None
+    assert statusline.session_dir({"sessionId": "nope"}) is None
+    assert statusline.session_dir({"sessionId": 42}) is None
+
+
+def test_count_running_tasks(home):
+    session = _make_session(home)
+    _write_task(session, "main", "agent-1", "running", "agent")
+    _write_task(session, "main", "bash-1", "running", "process")
+    _write_task(session, "main", "bash-2", "completed", "process")
+    _write_task(session, "agent-0", "agent-2", "running", "agent")
+    _write_task(session, "agent-0", "other", "running", "cron")  # неизвестный kind не считаем
+    (session / "agents" / "agent-0" / "tasks" / "broken.json").write_text("{junk")
+    assert statusline.count_running_tasks(str(session)) == {"agent": 2, "process": 1}
+
+
+def test_count_running_tasks_no_dirs(home):
+    session = _make_session(home)
+    assert statusline.count_running_tasks(str(session)) == {"agent": 0, "process": 0}
+    assert statusline.count_running_tasks(str(home / "missing")) == {"agent": 0, "process": 0}
+
+
+def test_tasks_segment(home):
+    session = _make_session(home)
+    assert statusline.tasks_segment({"sessionId": "abc-123"}) == ""
+    assert statusline.tasks_segment({}) == ""
+    _write_task(session, "main", "agent-1", "running", "agent")
+    _write_task(session, "main", "bash-1", "running", "process")
+    assert strip_ansi(statusline.tasks_segment({"sessionId": "abc-123"})) == "⚙ 1 agent + 1 shell"
+
+
+def test_tasks_segment_only_processes(home):
+    session = _make_session(home)
+    _write_task(session, "main", "bash-1", "running", "process")
+    _write_task(session, "main", "bash-2", "running", "process")
+    assert strip_ansi(statusline.tasks_segment({"sessionId": "abc-123"})) == "⚙ 2 shells"
+
+
+def test_render_includes_tasks_segment(home):
+    session = _make_session(home)
+    _write_task(session, "main", "agent-1", "running", "agent")
+    text = strip_ansi(statusline.render({"sessionId": "abc-123"}, {}))
+    assert "⚙ 1 agent" in text
+
+
 # ---------- main ----------
 
 def _run_main(monkeypatch, capsys, stdin_text):
