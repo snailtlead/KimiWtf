@@ -4,17 +4,19 @@
 Читает JSON-снимок TUI из stdin (model, cwd, gitBranch, permissionMode,
 planMode, contextUsage, contextTokens, maxContextTokens, sessionId, version)
 и печатает ОДНУ строку футера, добавляя квоту управляемого аккаунта
-(недельная квота + скользящее 5-часовое окно) в виде цветных прогресс-баров.
+(месячная квота + скользящее 5-часовое окно) в виде цветных прогресс-баров.
 
-Квота запрашивается у GET <base_url>/usages с OAuth access-токеном, который
-CLI хранит в credentials/kimi-code.json. Чтобы уложиться в бюджет TUI
+Квота запрашивается у GET <base_url>/usages с OAuth access-токеном. CLI
+хранит токен в credentials/kimi-code-env-*.json (по одному файлу на окружение);
+устаревший credentials/kimi-code.json читается как запасной вариант.
+Чтобы уложиться в бюджет TUI
 (300 мс на запуск, не чаще раза в секунду) и не нагружать API, сетевые
 запросы никогда не выполняются в пути рендера: при протухшем кеше запускается
 отделённый процесс `--refresh`, а строка рисуется из последних известных
 данных.
 
 Кеш: $KIMI_CODE_HOME/statusline-quota-cache.json
-  {"attempt_at": ts, "fetched_at": ts, "quota": {"week": {...}, "win5h": {...}}}
+  {"attempt_at": ts, "fetched_at": ts, "quota": {"month": {...}, "win5h": {...}}}
 
 Скрипт — read-only потребитель файла токена: он никогда его не перезаписывает
 и не ходит на OAuth token-endpoint; обновлением токена единолично владеет
@@ -27,6 +29,11 @@ CLI хранит в credentials/kimi-code.json. Чтобы уложиться в
 $KIMI_CODE_HOME/sessions/<wd>/session_<id>/agents/*/tasks/*.json — каждый файл
 описывает задачу со status ("running" и т.д.) и kind ("agent" | "process").
 Чтение локальное и дешёвое, сетевых запросов здесь нет.
+
+Текущий thinking-эффорт (low/high/max) в снимке TUI отсутствует, поэтому
+читается с диска: из последней записи llm.request в wire.jsonl текущей сессии
+(отражает переключение эффорта на лету), а до первого запроса — из
+[thinking].effort в config.toml. Показывается рядом с моделью: `K3·max`.
 """
 
 import contextlib
@@ -56,6 +63,41 @@ def kimi_home():
 
 def credentials_path():
     return os.path.join(kimi_home(), "credentials", "kimi-code.json")
+
+
+def load_token():
+    """Access-токен из credentials.
+
+    CLI пишет токен в kimi-code-env-<hash>.json (по файлу на окружение),
+    а устаревший kimi-code.json может остаться пустым. Берём файл
+    с непустым access_token и наибольшим expires_at.
+    """
+    cred_dir = os.path.join(kimi_home(), "credentials")
+    try:
+        names = [e.name for e in os.scandir(cred_dir)]
+    except OSError:
+        return None
+    paths = [os.path.join(cred_dir, n) for n in names if n.startswith("kimi-code-env-") and n.endswith(".json")]
+    paths.append(credentials_path())
+    best = None
+    for path in paths:
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        token = data.get("access_token")
+        if not token:
+            continue
+        try:
+            expires = float(data.get("expires_at") or 0)
+        except (TypeError, ValueError):
+            expires = 0
+        if best is None or expires > best[0]:
+            best = (expires, token)
+    return best[1] if best else None
 
 
 def cache_path():
@@ -101,13 +143,20 @@ def normalize_row(detail, window=None):
     return row
 
 
+def ratio_row(entry):
+    """Строка квоты из записи usages.*: {"used_ratio": 0..1, "reset_time": iso}."""
+    if not isinstance(entry, dict):
+        return None
+    try:
+        pct = round(float(entry.get("used_ratio")) * 100)
+    except (TypeError, ValueError):
+        return None
+    return {"pct": max(0, min(100, pct)), "reset": entry.get("reset_time")}
+
+
 def fetch_quota():
     """Запрашивает /usages и возвращает нормализованную квоту или None при ошибке."""
-    try:
-        with open(credentials_path(), encoding="utf-8") as f:
-            token = json.load(f).get("access_token")
-    except Exception:
-        return None
+    token = load_token()
     if not token:
         return None
     req = urllib.request.Request(
@@ -122,7 +171,14 @@ def fetch_quota():
     if not isinstance(payload, dict):
         return None
 
-    quota = {"week": normalize_row(payload.get("usage")), "win5h": None}
+    # Текущий формат: usages.limit_5h / limit_month_total / limit_month_code
+    # (доли used_ratio + reset_time). Недельная квота (usage) отключена
+    # сервисом, но разбирается ради старых ответов и кеша.
+    quota = {"month": None, "week": normalize_row(payload.get("usage")), "win5h": None}
+    usages = payload.get("usages")
+    if isinstance(usages, dict):
+        quota["month"] = ratio_row(usages.get("limit_month_total"))
+        quota["win5h"] = ratio_row(usages.get("limit_5h"))
     for item in payload.get("limits") or []:
         if not isinstance(item, dict):
             continue
@@ -130,13 +186,13 @@ def fetch_quota():
         if row is None:
             continue
         # Скользящее rate-limit окно (например, 300 минут = 5 часов).
-        if row.get("window", {}).get("timeUnit") == "TIME_UNIT_MINUTE":
+        if quota["win5h"] is None and row.get("window", {}).get("timeUnit") == "TIME_UNIT_MINUTE":
             quota["win5h"] = row
     if quota["win5h"] is None and payload.get("limits"):
         first = payload["limits"][0]
         if isinstance(first, dict):
             quota["win5h"] = normalize_row(first.get("detail"), first.get("window"))
-    return quota if (quota["week"] or quota["win5h"]) else None
+    return quota if any(quota.values()) else None
 
 
 def refresh():
@@ -233,6 +289,62 @@ def tasks_segment(snapshot):
     return f"{fg(81)}⚙ {' + '.join(parts)}{RESET}"
 
 
+# ---------- thinking-эффорт ----------
+
+WIRE_TAIL_BYTES = 256 * 1024  # хвост wire.jsonl, который сканируем
+
+
+def effort_from_wire(path):
+    """Эффорт из последней записи с thinkingEffort в хвосте wire.jsonl."""
+    try:
+        size = os.path.getsize(path)
+        with open(path, "rb") as f:
+            f.seek(max(0, size - WIRE_TAIL_BYTES))
+            tail = f.read().decode("utf-8", "replace")
+    except OSError:
+        return None
+    for line in reversed(tail.splitlines()):
+        if '"thinkingEffort"' not in line:
+            continue
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(record, dict):
+            effort = record.get("thinkingEffort")
+            if isinstance(effort, str) and effort:
+                return effort
+    return None
+
+
+def effort_from_config():
+    """Эффорт по умолчанию из [thinking].effort в config.toml (мини-парсер,
+    чтобы не требовать tomllib из Python 3.11+)."""
+    try:
+        with open(os.path.join(kimi_home(), "config.toml"), encoding="utf-8") as f:
+            section = ""
+            for raw in f:
+                line = raw.strip()
+                if line.startswith("["):
+                    section = line.strip("[]").strip()
+                elif section == "thinking" and line.startswith("effort"):
+                    value = line.partition("=")[2].strip().strip("\"'")
+                    return value or None
+    except OSError:
+        pass
+    return None
+
+
+def current_effort(snapshot):
+    """Эффорт текущей сессии: wire.jsonl, до первого запроса — config.toml."""
+    session = session_dir(snapshot)
+    if session:
+        effort = effort_from_wire(os.path.join(session, "agents", "main", "wire.jsonl"))
+        if effort:
+            return effort
+    return effort_from_config()
+
+
 # ---------- рендер ----------
 
 RESET = "\x1b[0m"
@@ -271,11 +383,15 @@ def fmt_reset(iso, with_date):
 def quota_segment(cache):
     quota = cache.get("quota") or {}
     parts = []
-    for key, label, with_date in (("win5h", "5h", False), ("week", "wk", True)):
+    for key, label, with_date in (("win5h", "5h", False), ("month", "mo", True), ("week", "wk", True)):
         row = quota.get(key)
-        if not row or not row.get("limit"):
+        if not row:
             continue
-        pct = round(row["used"] * 100 / row["limit"])
+        pct = row.get("pct")
+        if pct is None:
+            if not row.get("limit"):
+                continue
+            pct = round(row.get("used", 0) * 100 / row["limit"])
         seg = f"{label} {progress_bar(pct)} {fg(usage_color(pct))}{pct}%{RESET}"
         reset = fmt_reset(row.get("reset"), with_date)
         if reset:
@@ -310,7 +426,11 @@ def render(snapshot, cache):
 
     model = snapshot.get("model")
     if model:
-        parts.append(str(model))
+        text = str(model)
+        effort = current_effort(snapshot)
+        if effort:
+            text += f"{DIM}·{effort}{RESET}"
+        parts.append(text)
 
     cwd = snapshot.get("cwd") or ""
     if cwd:

@@ -18,13 +18,17 @@ def strip_ansi(text):
 
 
 PAYLOAD = {
-    "usage": {"limit": "100", "used": "3", "remaining": "97", "resetTime": "2026-08-05T19:24:53Z"},
     "limits": [
         {
             "window": {"duration": 300, "timeUnit": "TIME_UNIT_MINUTE"},
-            "detail": {"limit": "100", "used": "13", "remaining": "87", "resetTime": "2026-07-30T00:24:53Z"},
+            "detail": {"limit": "100", "used": "13", "remaining": "87", "resetTime": "2026-10-11T09:28:35Z"},
         }
     ],
+    "usages": {
+        "limit_5h": {"used_ratio": 0.13, "reset_time": "2026-10-11T09:28:34Z"},
+        "limit_month_total": {"used_ratio": 0.03, "reset_time": "2026-11-10T00:00:00Z"},
+        "limit_month_code": {"used_ratio": 0.03, "reset_time": "2026-11-10T00:00:00Z"},
+    },
 }
 
 
@@ -95,6 +99,55 @@ def test_normalize_row_defaults_and_bad_input():
     assert statusline.normalize_row({"used": "nan-int", "limit": "100"}) is None
 
 
+# ---------- load_token ----------
+
+def test_load_token_prefers_env_file(home):
+    _write_credentials(home, token="")
+    (home / "credentials" / "kimi-code-env-abc123.json").write_text(
+        json.dumps({"access_token": "env-token", "expires_at": 100})
+    )
+    assert statusline.load_token() == "env-token"
+
+
+def test_load_token_picks_latest_expiry(home):
+    cred_dir = home / "credentials"
+    cred_dir.mkdir()
+    (cred_dir / "kimi-code-env-old.json").write_text(json.dumps({"access_token": "old", "expires_at": 50}))
+    (cred_dir / "kimi-code-env-new.json").write_text(json.dumps({"access_token": "new", "expires_at": 150}))
+    assert statusline.load_token() == "new"
+
+
+def test_load_token_legacy_fallback(home):
+    _write_credentials(home, token="legacy-token")
+    assert statusline.load_token() == "legacy-token"
+
+
+def test_load_token_missing_and_broken(home):
+    assert statusline.load_token() is None
+    cred_dir = home / "credentials"
+    cred_dir.mkdir()
+    (cred_dir / "kimi-code-env-x.json").write_text("{broken")
+    (cred_dir / "kimi-code.json").write_text(json.dumps({"access_token": ""}))
+    assert statusline.load_token() is None
+
+
+def test_fetch_quota_reads_env_credentials(home, monkeypatch):
+    cred_dir = home / "credentials"
+    cred_dir.mkdir()
+    (cred_dir / "kimi-code.json").write_text(json.dumps({"access_token": ""}))
+    (cred_dir / "kimi-code-env-abc.json").write_text(json.dumps({"access_token": "env-token"}))
+    seen = {}
+
+    def fake_urlopen(req, timeout):
+        seen["auth"] = req.get_header("Authorization")
+        return FakeResponse(PAYLOAD)
+
+    monkeypatch.setattr(statusline.urllib.request, "urlopen", fake_urlopen)
+    quota = statusline.fetch_quota()
+    assert seen["auth"] == "Bearer env-token"
+    assert quota["month"] is not None
+
+
 # ---------- fetch_quota ----------
 
 def _write_credentials(home, token="token-123"):
@@ -107,9 +160,31 @@ def test_fetch_quota_success(home, monkeypatch):
     _write_credentials(home)
     monkeypatch.setattr(statusline.urllib.request, "urlopen", lambda req, timeout: FakeResponse(PAYLOAD))
     quota = statusline.fetch_quota()
-    assert quota["week"] == {"used": 3, "limit": 100, "reset": "2026-08-05T19:24:53Z"}
+    assert quota["month"] == {"pct": 3, "reset": "2026-11-10T00:00:00Z"}
+    assert quota["win5h"] == {"pct": 13, "reset": "2026-10-11T09:28:34Z"}
+    assert quota["week"] is None
+
+
+def test_fetch_quota_win5h_falls_back_to_limits(home, monkeypatch):
+    _write_credentials(home)
+    payload = {
+        "limits": PAYLOAD["limits"],
+        "usages": {"limit_month_total": {"used_ratio": 0.5, "reset_time": "2026-11-10T00:00:00Z"}},
+    }
+    monkeypatch.setattr(statusline.urllib.request, "urlopen", lambda req, timeout: FakeResponse(payload))
+    quota = statusline.fetch_quota()
     assert quota["win5h"]["used"] == 13
     assert quota["win5h"]["window"]["timeUnit"] == "TIME_UNIT_MINUTE"
+    assert quota["month"]["pct"] == 50
+
+
+def test_ratio_row():
+    assert statusline.ratio_row({"used_ratio": 0.084, "reset_time": "x"}) == {"pct": 8, "reset": "x"}
+    assert statusline.ratio_row({"used_ratio": 1.5}) == {"pct": 100, "reset": None}
+    assert statusline.ratio_row({"used_ratio": -0.2}) == {"pct": 0, "reset": None}
+    assert statusline.ratio_row({"used_ratio": "junk"}) is None
+    assert statusline.ratio_row(None) is None
+    assert statusline.ratio_row({}) is None
 
 
 def test_fetch_quota_sends_auth_header(home, monkeypatch):
@@ -298,6 +373,19 @@ def test_quota_segment_both_rows():
     assert "↻" in text
 
 
+def test_quota_segment_pct_rows():
+    cache = {
+        "quota": {
+            "win5h": {"pct": 8, "reset": "2026-10-11T09:28:34Z"},
+            "month": {"pct": 14, "reset": "2026-11-10T00:00:00Z"},
+        }
+    }
+    text = strip_ansi(statusline.quota_segment(cache))
+    assert "5h █░░░░░░░ 8%" in text
+    assert "mo █░░░░░░░ 14%" in text
+    assert "wk" not in text
+
+
 def test_quota_segment_without_reset():
     cache = {"quota": {"week": {"used": 50, "limit": 200, "reset": None}}}
     text = strip_ansi(statusline.quota_segment(cache))
@@ -404,6 +492,53 @@ def test_render_includes_tasks_segment(home):
     _write_task(session, "main", "agent-1", "running", "agent")
     text = strip_ansi(statusline.render({"sessionId": "abc-123"}, {}))
     assert "⚙ 1 agent" in text
+
+
+# ---------- thinking-эффорт ----------
+
+def _write_wire(session, lines):
+    agent = session / "agents" / "main"
+    agent.mkdir(parents=True, exist_ok=True)
+    (agent / "wire.jsonl").write_text("\n".join(lines) + "\n")
+
+
+def test_effort_from_wire_latest_wins(home):
+    session = _make_session(home)
+    _write_wire(session, [
+        json.dumps({"type": "llm.request", "thinkingEffort": "high"}),
+        "{broken",
+        json.dumps({"type": "llm.request", "thinkingEffort": "max"}),
+    ])
+    assert statusline.current_effort({"sessionId": "abc-123"}) == "max"
+
+
+def test_effort_from_wire_skips_noise(home):
+    session = _make_session(home)
+    _write_wire(session, [
+        json.dumps({"type": "llm.request"}),
+        json.dumps({"thinkingEffort": 42}),
+        json.dumps({"thinkingEffort": "low"}),
+    ])
+    assert statusline.current_effort({"sessionId": "abc-123"}) == "low"
+
+
+def test_effort_config_fallback(home):
+    _make_session(home)  # wire.jsonl ещё нет — сессия до первого запроса
+    (home / "config.toml").write_text('[models."x"]\ndefault_effort = "max"\n\n[thinking]\neffort = "high"\n')
+    assert statusline.current_effort({"sessionId": "abc-123"}) == "high"
+
+
+def test_effort_missing_everywhere(home):
+    assert statusline.current_effort({}) is None
+    _make_session(home)
+    assert statusline.current_effort({"sessionId": "abc-123"}) is None
+
+
+def test_render_shows_effort(home):
+    session = _make_session(home)
+    _write_wire(session, [json.dumps({"thinkingEffort": "max"})])
+    text = strip_ansi(statusline.render({"sessionId": "abc-123", "model": "K3"}, {}))
+    assert "K3·max" in text
 
 
 # ---------- main ----------

@@ -15,15 +15,15 @@
 
 ## English
 
-A plugin for [Kimi Code CLI](https://www.kimi.com/code/docs/en/) that shows your managed account quota in the status line: the weekly quota and the rolling 5-hour window as colored progress bars. Rendering never touches the network — quota is read from a local cache (5-minute TTL), a detached refresher makes at most one API call per minute, and the OAuth token is used read-only.
+A plugin for [Kimi Code CLI](https://www.kimi.com/code/docs/en/) that shows your managed account quota in the status line: the monthly quota and the rolling 5-hour window as colored progress bars. Rendering never touches the network — quota is read from a local cache (5-minute TTL), a detached refresher makes at most one API call per minute, and the OAuth token is used read-only.
 
 ### What it looks like
 
 ```
-[plan+yolo] │ K3 │ ~/proj (main) │ ⚙ 1 agent + 2 shells │ 5h █░░░░░░░ 16% ↻ 03:24  wk ░░░░░░░░ 3% ↻ 05.08
+[plan+yolo] │ K3·max │ ~/proj (main) │ ⚙ 1 agent + 2 shells │ 5h █░░░░░░░ 16% ↻ 03:24  mo █░░░░░░░ 14% ↻ 10.11
 ```
 
-Bar and percentage colors follow usage thresholds: green < 50%, yellow 50–80%, red ≥ 80% (the same threshold at which the Kimi console suggests Extra Usage). `↻` is the window reset time (local). Mode badges (`plan`, `yolo`, `auto`) only appear in non-default modes. The `⚙` segment shows running background tasks of the current session (subagents and background shell commands); it replaces the built-in `tasks` footer slot that a custom status line hides, and appears only while at least one task is running.
+Bar and percentage colors follow usage thresholds: green < 50%, yellow 50–80%, red ≥ 80% (the same threshold at which the Kimi console suggests Extra Usage). `↻` is the window reset time (local). `mo` is the monthly quota (`limit_month_total`); the weekly quota was discontinued by the service and no longer shown. Mode badges (`plan`, `yolo`, `auto`) only appear in non-default modes. The `⚙` segment shows running background tasks of the current session (subagents and background shell commands); it replaces the built-in `tasks` footer slot that a custom status line hides, and appears only while at least one task is running.
 
 ### Requirements
 
@@ -113,15 +113,15 @@ Layout: `statusline.py` — the status line; `scripts/tui_config.py` — the `tu
 
 ## Русский
 
-Плагин для [Kimi Code CLI](https://www.kimi.com/code/docs/en/), который показывает квоту управляемого аккаунта в строке состояния: недельную квоту и скользящее 5-часовое окно в виде цветных прогресс-баров. Рендер не обращается к сети — квота читается из локального кеша (TTL 5 минут), отделённый рефрешер делает не более одного запроса к API в минуту, OAuth-токен используется только на чтение.
+Плагин для [Kimi Code CLI](https://www.kimi.com/code/docs/en/), который показывает квоту управляемого аккаунта в строке состояния: месячную квоту и скользящее 5-часовое окно в виде цветных прогресс-баров. Рендер не обращается к сети — квота читается из локального кеша (TTL 5 минут), отделённый рефрешер делает не более одного запроса к API в минуту, OAuth-токен используется только на чтение.
 
 ### Как выглядит
 
 ```
-[plan+yolo] │ K3 │ ~/proj (main) │ ⚙ 1 agent + 2 shells │ 5h █░░░░░░░ 16% ↻ 03:24  wk ░░░░░░░░ 3% ↻ 05.08
+[plan+yolo] │ K3·max │ ~/proj (main) │ ⚙ 1 agent + 2 shells │ 5h █░░░░░░░ 16% ↻ 03:24  mo █░░░░░░░ 14% ↻ 10.11
 ```
 
-Цвет бара и процента — по порогам расхода: зелёный < 50%, жёлтый 50–80%, красный ≥ 80% (порог совпадает с тем, с которого консоль Kimi предлагает подключить Extra Usage). `↻` — время сброса окна (локальное). Бейджы режимов (`plan`, `yolo`, `auto`) показываются только в нестандартных режимах. Сегмент `⚙` показывает запущенные фоновые задачи текущей сессии (субагенты и фоновые shell-команды); он заменяет встроенный слот `tasks`, который пропадает при кастомной строке, и виден только пока есть хотя бы одна запущенная задача.
+Цвет бара и процента — по порогам расхода: зелёный < 50%, жёлтый 50–80%, красный ≥ 80% (порог совпадает с тем, с которого консоль Kimi предлагает подключить Extra Usage). `↻` — время сброса окна (локальное). `mo` — месячная квота (`limit_month_total`); недельную квоту сервис отключил, она больше не показывается. Бейджы режимов (`plan`, `yolo`, `auto`) показываются только в нестандартных режимах. Сегмент `⚙` показывает запущенные фоновые задачи текущей сессии (субагенты и фоновые shell-команды); он заменяет встроенный слот `tasks`, который пропадает при кастомной строке, и виден только пока есть хотя бы одна запущенная задача.
 
 ### Требования
 
